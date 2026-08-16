@@ -1,0 +1,19 @@
+{
+  "name": "DM Card Collector",
+  "short_name": "DM Collector",
+  "description": "Duel Masters card metadata collector",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#11182e",
+  "orientation": "portrait-primary",
+  "icons": [{ "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }],
+  "share_target": {
+    "action": "./?share=1",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": { "title": "title", "text": "capture", "url": "url" }
+  }
+}
