@@ -1,4 +1,5 @@
 import importlib.util
+import sys
 import tempfile
 import unittest
 from email.message import EmailMessage
@@ -8,6 +9,7 @@ from pathlib import Path
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "mht_extract.py"
 spec = importlib.util.spec_from_file_location("mht_extract", MODULE_PATH)
 mht_extract = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mht_extract
 spec.loader.exec_module(mht_extract)
 
 
