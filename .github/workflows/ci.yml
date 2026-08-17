@@ -15,8 +15,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
       - run: npm test
       - name: JavaScript syntax checks
         run: node --check src/app.js && node --check src/core.js && node --check src/db.js && node --check sw.js
