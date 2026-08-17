@@ -21,13 +21,11 @@ npm test
 
 The app is dependency-free. IndexedDB data is local to the browser. Use **Export JSON** to back it up.
 
-## Bookmarklet
+## Android Chrome capture
 
-Create a bookmark whose URL is the following, replacing `YOUR_PAGES_URL` after deployment:
+Use **ブックマークレットをコピー** in the app, paste the copied code into a Chrome bookmark URL, open the source card page, and run that bookmark there (not inside Collector). It transfers only the source URL, title, capped visible text, and safe HTTP(S) image URL candidates already present in the rendered DOM. It never transfers page HTML or image binaries.
 
-```text
-javascript:(()=>location.href='YOUR_PAGES_URL/?capture='+encodeURIComponent(JSON.stringify({url:location.href,title:document.title,text:(document.body.innerText||'').slice(0,50000),images:[...document.images].map(i=>i.currentSrc||i.src).filter(Boolean).slice(0,100)})))()
-```
+Chrome Web Share Target remains available and parses shared `title`, `text`, and `url`. Sharing cannot access the source page DOM or `document.images`, so shared captures can legitimately have zero image candidates; use the bookmarklet when image URL discovery is needed.
 
 ## GitHub Pages
 

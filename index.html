@@ -20,6 +20,13 @@
       <div class="actions"><button id="capture">回収して検証</button><button id="capture-page" class="secondary">このページの表示DOM</button></div>
       <p id="status" role="status">データはこの端末だけに保存されます。</p>
     </section>
+    <section class="panel bookmarklet-help">
+      <h2>Androidで元ページを回収</h2>
+      <p><strong>ブックマークレットは、このCollector上ではなく回収したいカードが表示されている元サイト上で実行します。</strong></p>
+      <ol><li>下のボタンでコードをコピー</li><li>Chromeで任意のページをブックマークし、編集画面のURL欄へコードを貼る</li><li>公式カードページを開く</li><li>アドレスバーから作ったブックマークを検索して実行</li><li>Collectorへ移動後、検証結果を確認</li></ol>
+      <button id="copy-bookmarklet">ブックマークレットをコピー</button>
+      <p class="note">表示済み本文と、DOMにある画像URL候補だけを渡します。画像本体やHTMLは送りません。Chromeの「共有」ではDOMを読めないため、画像候補が0件の場合があります。</p>
+    </section>
     <section class="panel toolbar"><div><h2>回収キュー</h2><small>重複排除・中断後も再開可能</small></div><div><button id="resume" class="ghost">再検証</button><button id="export" class="ghost">JSON出力</button></div></section>
     <section id="records" class="records" aria-live="polite"></section>
   </main>
