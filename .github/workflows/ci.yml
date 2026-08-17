@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test
+      - name: JavaScript syntax checks
+        run: node --check src/app.js && node --check src/core.js && node --check src/db.js && node --check sw.js
+      - name: Python MHT extractor tests
+        run: python3 -m unittest discover -s test -p 'test_*.py'
+      - name: Python syntax check
+        run: python3 -m py_compile tools/mht_extract.py test/test_mht_extract.py

@@ -1,0 +1,9 @@
+# Local bulk source archives / extraction output
+*.mht
+*.mhtml
+mht-output/
+extracted/
+
+# Python cache
+__pycache__/
+*.py[cod]
