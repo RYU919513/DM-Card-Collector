@@ -20,6 +20,12 @@
       <div class="actions"><button id="capture">回収して検証</button><button id="capture-page" class="secondary">このページの表示DOM</button></div>
       <p id="status" role="status">データはこの端末だけに保存されます。</p>
     </section>
+    <section class="panel guide">
+      <h2>Android Chromeで公式カードを回収</h2>
+      <ol><li>下のボタンでコードをコピーします。</li><li>Chromeで任意のページをブックマークし、編集画面でURL欄をコピーしたコードに置き換えます。</li><li>デュエル・マスターズ公式カード詳細を開き、アドレスバーからそのブックマーク名を検索して実行します。</li><li>Collectorへ戻ったら、取得結果を確認します。</li></ol>
+      <button id="copy-bookmarklet">ブックマークレットをコピー</button>
+      <p><small>公式ページ上で実行してください。表示済み本文と画像URL候補だけをこの端末のCollectorへ渡します。</small></p>
+    </section>
     <section class="panel toolbar"><div><h2>回収キュー</h2><small>重複排除・中断後も再開可能</small></div><div><button id="resume" class="ghost">再検証</button><button id="export" class="ghost">JSON出力</button></div></section>
     <section id="records" class="records" aria-live="polite"></section>
   </main>
