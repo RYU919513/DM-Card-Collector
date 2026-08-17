@@ -49,3 +49,36 @@ test('image candidates deduplicate URLs without retaining binaries', () => {
   assert.deepEqual(imageCandidates(['https://x.test/a.png', 'https://x.test/a.png']), ['https://x.test/a.png']);
   assert.deepEqual(imageCandidates(['data:image/png;base64,AAAA']), []);
 });
+
+test('official fixture resolves paste URL and title fields', () => {
+  const parsed = parseCapture({
+    title: '熱き邪道 レッドゾーンZ (DM25RP3 5/77)',
+    text: '熱き邪道 レッドゾーンZ\nhttps://dm.takaratomy.co.jp/card/detail/?id=dm25rp3-005'
+  }, { url: 'https://ryu919513.github.io/DM-Card-Collector/', method: 'paste' });
+  assert.equal(parsed.source, 'official');
+  assert.equal(parsed.fields.name, '熱き邪道 レッドゾーンZ');
+  assert.equal(parsed.fields.number, 'DM25RP3 5/77');
+  assert.equal(parsed.fields.sourceUrl, 'https://dm.takaratomy.co.jp/card/detail/?id=dm25rp3-005');
+  assert.equal(validate(parsed).valid, true);
+});
+
+test('official source detection rejects deceptive hostname', () => {
+  assert.equal(detectSource('https://evil-dm.takaratomy.co.jp.example.com/card'), 'generic');
+  assert.equal(detectSource('https://sub.dm.takaratomy.co.jp/card'), 'official');
+});
+
+test('number can be read from body without title', () => {
+  assert.equal(parseCapture('熱き邪道 レッドゾーンZ\nDM25RP3 5/77').fields.number, 'DM25RP3 5/77');
+});
+
+test('collector visible DOM is rejected with a useful validation error', () => {
+  const parsed = parseCapture({ url: 'https://ryu919513.github.io/DM-Card-Collector/', title: 'DM Card Collector', text: 'LOCAL-FIRST PWA\nDM Card Collector\nNO CLOUD WRITES' }, { method: 'visible-dom' });
+  const result = validate(parsed);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /Collector自身/);
+});
+
+test('DOM image fields and srcsets normalize safe URLs only', () => {
+  const result = imageCandidates([{ currentSrc: '/current.webp', src: 'https://img.test/card', srcset: '/small.jpg 1x, /large.jpg 2x', dataSrc: '/lazy.png', dataLazySrc: 'data:image/png,x', dataOriginal: 'blob:x' }, 'javascript:alert(1)'], 'https://dm.takaratomy.co.jp/card/');
+  assert.deepEqual(result, ['https://dm.takaratomy.co.jp/current.webp', 'https://img.test/card', 'https://dm.takaratomy.co.jp/small.jpg', 'https://dm.takaratomy.co.jp/large.jpg', 'https://dm.takaratomy.co.jp/lazy.png']);
+});
