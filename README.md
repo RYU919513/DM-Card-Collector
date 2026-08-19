@@ -35,4 +35,10 @@ The workflow in `.github/workflows/pages.yml` deploys this static app after a pu
 
 ## Privacy and safety
 
-No analytics, authentication, remote API, Firebase SDK, or Firestore SDK is included. The collector never writes to source sites. It stores capped text excerpts and URL strings only; image binaries, MHT, and complete HTML are not retained.
+No analytics, authentication, remote API, Firebase SDK, or Firestore SDK is included. The collector never writes to source sites. Ordinary captures store capped text excerpts and URL strings only. MHT/MHTML files are retained only when the user explicitly imports them, in a separate local IndexedDB store for reproducible re-parsing.
+
+## Offline MHT/MHTML import
+
+Use **MHT/MHTMLを追加** to import a card-search or card-detail archive saved manually from the official site. The browser parses MIME parts locally, computes SHA-256 identities, stores the original archive in the additive `mhtRaw` IndexedDB store, and writes only human-review-required candidates to `mhtImports`. Imported scripts, frames, and remote resources are never executed or fetched. Archives are capped at 50 MB; failures remain retryable records. Bulk crawling and automatic approval are deliberately out of scope.
+
+The in-browser parser and the Python image extractor serve different purposes: `src/mht.js` powers local PWA imports, while `tools/mht_extract.py` copies original embedded image bytes to an explicitly selected local output directory.

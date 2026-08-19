@@ -1,5 +1,7 @@
 import { compareRecords, fingerprint, makeRaw, parseCapture, validate } from './core.js';
-import { getAll, put, remove } from './db.js';
+import { getAll, put, remove, saveMhtImport } from './db.js';
+import { parseMht, sha256Hex } from './mht.js';
+import { classifyPage, collectionProgress, compareMhtCandidate, enrichCandidate, PAGE_TYPES, parseCardDetail, parseSearchResult } from './mht-pipeline.js';
 
 const $ = selector => document.querySelector(selector);
 let installPrompt;
@@ -40,6 +42,42 @@ async function render() {
 }
 
 const escapeHtml = value => String(value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
+
+
+async function importMht(file) {
+  let bytes, sourceFileHash;
+  const result = $('#mht-result'); result.className = 'import-result'; result.textContent = '解析中…';
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+    [sourceFileHash] = await Promise.all([sha256Hex(bytes)]);
+    const [parsed] = await Promise.all([parseMht({ name: file.name, type: file.type, arrayBuffer: async () => bytes.buffer })]);
+    const detected = classifyPage(parsed);
+    const base = detected.pageType === PAGE_TYPES.SEARCH_RESULT ? parseSearchResult(parsed.html, parsed) : detected.pageType === PAGE_TYPES.CARD_DETAIL ? parseCardDetail(parsed.html, parsed) : { pageType: PAGE_TYPES.UNKNOWN, sourceUrl: parsed.sourceUrl };
+    const contentHash = await sha256Hex(new TextEncoder().encode(JSON.stringify(base)));
+    const importedAt = new Date().toISOString();
+    let candidate = enrichCandidate({ ...base, contentHash }, { sourceType: 'OFFICIAL_MHT', sourceUrl: parsed.sourceUrl, sourceFileName: file.name.replace(/^.*[\\/]/, '').slice(0, 255), sourceFileHash, importedAt, capturedAt: null, rawSourceReference: sourceFileHash });
+    const existing = await getAll('mhtImports'); const duplicate = compareMhtCandidate(candidate, existing);
+    candidate = { ...candidate, id: crypto.randomUUID(), duplicate, retryCount: 0, lastAttempt: importedAt };
+    if (duplicate.kind !== 'NEW') candidate = { ...candidate, state: duplicate.kind === 'DUPLICATE' || duplicate.kind === 'DUPLICATE_RAW' ? 'DUPLICATE' : 'CONFLICT', humanReviewRequired: true };
+    await saveMhtImport({ id: sourceFileHash, sourceFileName: candidate.provenance.sourceFileName, sourceFileHash, importedAt, bytes: new Blob([bytes], { type: file.type || 'multipart/related' }), byteLength: bytes.length }, candidate);
+    const progress = collectionProgress([...existing, candidate]);
+    if (candidate.pageType === PAGE_TYPES.SEARCH_RESULT) result.innerHTML = `<h3>ページ ${candidate.pageNumber ?? '不明'} を認識しました</h3><p>${candidate.occurrenceCount}件検出 · 固有 ${candidate.uniqueCardCount} · 重複 ${candidate.duplicateCount}</p><p>状態: ${escapeHtml(candidate.state)} · 要確認</p><small>保存済み${progress.nextSuggestedPage ? ` · 次に推奨: ページ${progress.nextSuggestedPage}` : ''}</small>`;
+    else if (candidate.pageType === PAGE_TYPES.CARD_DETAIL) result.innerHTML = `<h3>${escapeHtml(candidate.cardName || 'カード名未取得')}</h3><p>${escapeHtml(candidate.cardNumber || '番号未取得')} · ${escapeHtml(candidate.officialId || 'ID未取得')}</p><p>抽出 ${Object.values(candidate).filter(Boolean).length} field · ${escapeHtml(candidate.state)} · 要確認</p><small>raw保存済み</small>`;
+    else { result.classList.add('error'); result.innerHTML = '<h3>ページ種別を判定できません</h3><p>rawは保存しました。再試行または人間レビューが必要です。</p>'; }
+  } catch (error) {
+    result.classList.add('error'); result.textContent = `FAILED [${error.code || 'IMPORT_ERROR'}]: ${error.message}`;
+    if (bytes && sourceFileHash) try {
+      const lastAttempt = new Date().toISOString(), id = crypto.randomUUID();
+      await saveMhtImport({ id: sourceFileHash, sourceFileName: file.name.replace(/^.*[\\/]/, '').slice(0, 255), sourceFileHash, importedAt: lastAttempt, bytes: new Blob([bytes], { type: file.type || 'multipart/related' }), byteLength: bytes.length },
+        { id, pageType: PAGE_TYPES.UNKNOWN, state: 'FAILED', humanReviewRequired: true, retryCount: 1, lastAttempt, failure: { code: error.code || 'IMPORT_ERROR', message: String(error.message).slice(0, 500) }, provenance: { sourceType: 'OFFICIAL_MHT', sourceFileName: file.name.replace(/^.*[\\/]/, '').slice(0, 255), sourceFileHash, importedAt: lastAttempt, rawSourceReference: sourceFileHash } });
+    } catch { result.textContent += '（raw保存にも失敗しました。容量を確認してください）'; }
+  }
+}
+const mhtInput = $('#mht-input'), drop = $('#mht-drop');
+mhtInput.onchange = () => { if (mhtInput.files[0]) importMht(mhtInput.files[0]); mhtInput.value = ''; };
+for (const event of ['dragenter', 'dragover']) drop.addEventListener(event, e => { e.preventDefault(); drop.classList.add('drag'); });
+for (const event of ['dragleave', 'drop']) drop.addEventListener(event, e => { e.preventDefault(); drop.classList.remove('drag'); });
+drop.addEventListener('drop', event => { const file = event.dataTransfer.files[0]; if (file) importMht(file); });
 
 $('#capture').onclick = () => capture({ text: $('#capture-input').value, url: location.href }, 'paste');
 $('#capture-page').onclick = () => capture({ url: location.href, title: document.title, text: document.body.innerText, images: [...document.images].map(image => image.currentSrc || image.src) }, 'visible-dom');
