@@ -15,6 +15,11 @@
   <main>
     <section class="hero"><p>表示済みのページから、カード情報と画像URL候補だけを端末内へ。</p><div class="stats"><article><strong id="staging-count">0</strong><span>STAGING</span></article><article><strong id="raw-count">0</strong><span>RAW</span></article><article><strong id="failed-count">0</strong><span>FAILED</span></article></div></section>
     <section class="panel">
+      <label for="mht-input">公式カード検索 MHT / MHTML</label>
+      <div id="mht-drop" class="drop-zone"><input id="mht-input" type="file" accept=".mht,.mhtml,multipart/related,message/rfc822"><strong>MHT/MHTMLを追加</strong><small>端末内だけで解析・保存します（最大50 MB）</small></div>
+      <div id="mht-result" class="import-result" aria-live="polite"></div>
+    </section>
+    <section class="panel">
       <label for="capture-input">テキスト / URL / JSON</label>
       <textarea id="capture-input" rows="7" placeholder="カード名、型番、能力テキスト、URLなどを貼り付け"></textarea>
       <div class="actions"><button id="capture">回収して検証</button><button id="capture-page" class="secondary">このページの表示DOM</button></div>

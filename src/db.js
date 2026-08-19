@@ -1,6 +1,6 @@
 const DB_NAME = 'dm-card-collector';
-const VERSION = 1;
-const STORES = ['raw', 'staging', 'failed'];
+const VERSION = 2;
+const STORES = ['raw', 'staging', 'failed', 'mhtRaw', 'mhtImports'];
 
 export function openDB() {
   return new Promise((resolve, reject) => {
@@ -24,3 +24,11 @@ export async function transact(store, mode, action) {
 export const put = (store, value) => transact(store, 'readwrite', objectStore => objectStore.put(value));
 export const getAll = store => transact(store, 'readonly', objectStore => objectStore.getAll());
 export const remove = (store, id) => transact(store, 'readwrite', objectStore => objectStore.delete(id));
+export function saveMhtImport(raw, candidate) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(['mhtRaw', 'mhtImports'], 'readwrite');
+    tx.objectStore('mhtRaw').put(raw); tx.objectStore('mhtImports').put(candidate);
+    tx.oncomplete = () => { db.close(); resolve(candidate); };
+    tx.onerror = tx.onabort = () => { const error = tx.error; db.close(); reject(error); };
+  }));
+}
