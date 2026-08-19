@@ -3,5 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test" }
+  "scripts": {
+    "test": "node --test",
+    "codex:start": "node tools/collector_ops.mjs start",
+    "codex:check": "node tools/collector_ops.mjs check",
+    "codex:end": "node tools/collector_ops.mjs end",
+    "handoff:create": "bash tools/create_handoff.sh"
+  }
 }

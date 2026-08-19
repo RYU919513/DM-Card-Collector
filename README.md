@@ -21,6 +21,26 @@ npm test
 
 The app is dependency-free. IndexedDB data is local to the browser. Use **Export JSON** to back it up.
 
+## Codex collection operations
+
+The tracked `.collector/checkpoint.json` is the secret-free recovery summary for a future workspace. It records completed, pending, failed, retry, validation, duplicate, review, and staging state without containing collected bulk data. Run:
+
+```bash
+npm run codex:start
+npm run codex:check
+npm run codex:end
+```
+
+Incremental collection uses the explicit `FRESH`, `STALE`, `CHANGED`, `UNKNOWN`, `FAILED`, and `HUMAN_REVIEW` states. A fresh matching content hash may be reused; every other state is recollected or reviewed. Collection, validation, approval, and publication are separate states. Neither a successful capture nor schema validation grants approval, and this repository contains no production database writer.
+
+Candidate exports conform to `schemas/candidate.schema.json` and remain staging data. Provenance should include source identifier, retrieval time, parser and normalization versions, schema version, content hash, and validation result. Code handoff is generated separately from card-data exports:
+
+```bash
+npm run handoff:create -- /safe/output/dm-collector-handoff
+```
+
+The resulting archive contains a Git bundle, manifest, checksums, test reports, restore instructions, bundle verification, temporary restored tests, and `git fsck` results. It intentionally excludes IndexedDB exports and bulk card images. Use `docs/BUG_REPORT_TEMPLATE.md` for parser/collector defects and revalidate all potentially affected historical candidates.
+
 ## Bookmarklet
 
 Create a bookmark whose URL is the following, replacing `YOUR_PAGES_URL` after deployment:

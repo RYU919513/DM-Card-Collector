@@ -1,4 +1,4 @@
-import { compareRecords, fingerprint, makeRaw, parseCapture, validate } from './core.js';
+import { compareRecords, contentHash, fingerprint, makeRaw, parseCapture, validate } from './core.js';
 import { getAll, put, remove } from './db.js';
 
 const $ = selector => document.querySelector(selector);
@@ -15,8 +15,9 @@ async function processRaw(raw) {
   }
   const id = fingerprint(parsed);
   const existing = (await getAll('staging')).find(record => record.id === id);
-  const record = { ...parsed, id, rawId: raw.id, provenance: raw.provenance, capturedAt: raw.capturedAt, duplicateCount: (existing?.duplicateCount || 0) + (existing ? 1 : 0) };
-  await put('staging', existing ? { ...existing, ...record, provenanceHistory: [...(existing.provenanceHistory || [existing.provenance]), raw.provenance] } : record);
+  const provenance = { ...raw.provenance, parserVersion: parsed.parser, schemaVersion: 1, contentHash: contentHash(parsed), normalizationVersion: 'nfkc-v1', validationResult: 'valid' };
+  const record = { ...parsed, id, rawId: raw.id, pipelineState: 'VALIDATED', approvalState: 'HUMAN_REVIEW_REQUIRED', provenance, capturedAt: raw.capturedAt, duplicateCount: (existing?.duplicateCount || 0) + (existing ? 1 : 0) };
+  await put('staging', existing ? { ...existing, ...record, provenanceHistory: [...(existing.provenanceHistory || [existing.provenance]), provenance] } : record);
   await remove('raw', raw.id);
   return { ok: true, record };
 }
