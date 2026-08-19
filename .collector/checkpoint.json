@@ -1,0 +1,19 @@
+{
+  "checkpointVersion": 1,
+  "collectorVersion": "1.0.0",
+  "sourceVersion": "uncollected",
+  "lastAcceptedCommit": "b00460cbf67d497ea06e09c3fdaf58b753f28931",
+  "schemaVersion": 1,
+  "updatedAt": null,
+  "completedRanges": [],
+  "pendingRanges": [],
+  "failedItems": [],
+  "retryCandidates": [],
+  "validationSummary": { "valid": 0, "invalid": 0, "unknown": 0 },
+  "duplicateSummary": { "duplicates": 0, "conflicts": 0 },
+  "humanReviewRequired": [],
+  "staging": { "candidates": 0, "approved": 0, "published": 0 },
+  "knownFailures": [],
+  "constraints": ["local-only", "no production writes", "human approval required"],
+  "nextRecommendedAction": "Run npm run codex:start before collection."
+}

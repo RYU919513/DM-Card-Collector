@@ -42,6 +42,16 @@ export function fingerprint(record) {
   return `dm-${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
+export function contentHash(record) {
+  const value = JSON.stringify(record?.fields || record, Object.keys(record?.fields || record || {}).sort());
+  let first = 2166136261; let second = 2246822507;
+  for (const char of value) {
+    first = Math.imul(first ^ char.charCodeAt(0), 16777619);
+    second = Math.imul(second ^ char.charCodeAt(0), 3266489909);
+  }
+  return `fnv64-${(first >>> 0).toString(16).padStart(8, '0')}${(second >>> 0).toString(16).padStart(8, '0')}`;
+}
+
 export function validate(parsed) {
   const errors = [];
   if (!parsed.fields.name && !parsed.fields.number) errors.push('カード名またはカード番号が必要です');
@@ -66,5 +76,6 @@ export function compareRecords(records) {
 
 export function makeRaw(input, context = {}) {
   const payload = typeof input === 'object' && input ? input : { text: String(input || '') };
-  return { id: crypto.randomUUID(), capturedAt: new Date().toISOString(), status: 'pending', attempts: 0, payload: { url: String(payload.url || context.url || '').slice(0, 2048), title: String(payload.title || '').slice(0, 300), text: String(payload.text || '').slice(0, 50000), images: imageCandidates(payload.images || [], payload.url || context.url).slice(0, 100) }, provenance: { method: context.method || 'paste', pageUrl: context.url || payload.url || null, capturedAt: new Date().toISOString() } };
+  const capturedAt = new Date().toISOString();
+  return { id: crypto.randomUUID(), capturedAt, status: 'pending', attempts: 0, payload: { url: String(payload.url || context.url || '').slice(0, 2048), title: String(payload.title || '').slice(0, 300), text: String(payload.text || '').slice(0, 50000), images: imageCandidates(payload.images || [], payload.url || context.url).slice(0, 100) }, provenance: { method: context.method || 'paste', pageUrl: context.url || payload.url || null, sourceIdentifier: detectSource(payload.url || context.url), retrievedAt: capturedAt, capturedAt } };
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareRecords, detectSource, fingerprint, imageCandidates, makeRaw, parseCapture, validate } from '../src/core.js';
+import { compareRecords, contentHash, detectSource, fingerprint, imageCandidates, makeRaw, parseCapture, validate } from '../src/core.js';
 
 test('detects supported sources and generic fallback', () => {
   assert.equal(detectSource('https://dm.takaratomy.co.jp/card/'), 'official');
@@ -24,7 +24,14 @@ test('raw is capped, retryable, compact, and contains provenance', () => {
   assert.equal(raw.payload.text.length, 50000);
   assert.equal(raw.status, 'pending'); assert.equal(raw.attempts, 0);
   assert.equal(raw.provenance.method, 'visible-dom');
+  assert.equal(raw.provenance.sourceIdentifier, 'generic');
+  assert.ok(raw.provenance.retrievedAt);
   assert.equal('html' in raw.payload, false);
+});
+
+test('content hashes are deterministic and change with candidate content', () => {
+  assert.equal(contentHash({ name: 'A', number: '1' }), contentHash({ number: '1', name: 'A' }));
+  assert.notEqual(contentHash({ name: 'A' }), contentHash({ name: 'B' }));
 });
 
 test('validation rejects unusable captures and fingerprints duplicates', () => {

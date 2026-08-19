@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dm-card-collector.local/schemas/candidate.schema.json",
+  "title": "DM Card Collector candidate export",
+  "type": "object",
+  "required": ["schemaVersion", "exportedAt", "records", "raw", "failed", "comparisons"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "records": { "type": "array", "items": { "$ref": "#/$defs/candidate" } },
+    "raw": { "type": "array", "items": { "type": "object", "required": ["id", "status", "payload", "provenance"] } },
+    "failed": { "type": "array", "items": { "type": "object", "required": ["id", "status", "errors"] } },
+    "comparisons": { "type": "array" }
+  },
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "required": ["id", "fields", "pipelineState", "approvalState", "provenance"],
+      "properties": {
+        "pipelineState": { "enum": ["VALIDATED"] },
+        "approvalState": { "enum": ["HUMAN_REVIEW_REQUIRED", "APPROVED"] },
+        "provenance": { "type": "object", "required": ["sourceIdentifier", "retrievedAt", "parserVersion", "schemaVersion", "contentHash", "normalizationVersion", "validationResult"] }
+      }
+    }
+  },
+  "additionalProperties": true,
+  "description": "Candidate/staging data only. Conformance never constitutes human approval or publication."
+}
