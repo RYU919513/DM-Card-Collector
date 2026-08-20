@@ -11,18 +11,93 @@
   <title>DM Card Collector</title>
 </head>
 <body>
-  <header><div><span class="eyebrow">LOCAL-FIRST PWA</span><h1>DM Card<br><b>Collector</b></h1></div><button id="install" class="ghost" hidden>インストール</button></header>
+  <header>
+    <div><span class="eyebrow">LOCAL-FIRST PWA</span><h1>DM Card<br><b>Collector</b></h1></div>
+    <button id="install" class="ghost" hidden>インストール</button>
+  </header>
+
   <main>
-    <section class="hero"><p>表示済みのページから、カード情報と画像URL候補だけを端末内へ。</p><div class="stats"><article><strong id="staging-count">0</strong><span>STAGING</span></article><article><strong id="raw-count">0</strong><span>RAW</span></article><article><strong id="failed-count">0</strong><span>FAILED</span></article></div></section>
+    <!-- A. 回収進捗サマリー -->
+    <section class="hero">
+      <p>表示済みのページから、カード情報と画像URL候補だけを端末内へ。</p>
+      <div class="stats" id="summary-stats">
+        <article><strong id="stat-total">0</strong><span>合計</span></article>
+        <article><strong id="stat-success">0</strong><span>SUCCESS</span></article>
+        <article><strong id="stat-review">0</strong><span>要確認</span></article>
+        <article><strong id="stat-failed">0</strong><span>FAILED</span></article>
+        <article><strong id="stat-eligible">0</strong><span>削除可能</span></article>
+      </div>
+    </section>
+
+    <!-- 回収入口 -->
     <section class="panel">
       <label for="capture-input">テキスト / URL / JSON</label>
-      <textarea id="capture-input" rows="7" placeholder="カード名、型番、能力テキスト、URLなどを貼り付け"></textarea>
-      <div class="actions"><button id="capture">回収して検証</button><button id="capture-page" class="secondary">このページの表示DOM</button></div>
+      <textarea id="capture-input" rows="6" placeholder="カード名、型番、能力テキスト、URLなどを貼り付け"></textarea>
+      <div class="actions">
+        <button id="capture">回収して検証</button>
+        <button id="capture-page" class="secondary">このページの表示DOM</button>
+      </div>
       <p id="status" role="status">データはこの端末だけに保存されます。</p>
     </section>
-    <section class="panel toolbar"><div><h2>回収キュー</h2><small>重複排除・中断後も再開可能</small></div><div><button id="resume" class="ghost">再検証</button><button id="export" class="ghost">JSON出力</button></div></section>
+
+    <!-- C. 検索 / フィルタ -->
+    <section class="panel toolbar-panel">
+      <div class="search-row">
+        <input id="search-input" type="search" placeholder="カード名 / 番号 / officialId で検索" autocomplete="off">
+      </div>
+      <div class="filter-row" role="group" aria-label="ステータスフィルタ">
+        <button class="filter-btn active" data-filter="ALL">全て</button>
+        <button class="filter-btn" data-filter="SUCCESS">SUCCESS</button>
+        <button class="filter-btn" data-filter="NEEDS_REVIEW">要確認</button>
+        <button class="filter-btn" data-filter="FAILED">FAILED</button>
+        <button class="filter-btn" data-filter="CONFLICT">競合</button>
+        <button class="filter-btn" data-filter="DUPLICATE">重複</button>
+        <button class="filter-btn" data-filter="DELETE_ELIGIBLE">削除可能</button>
+      </div>
+      <div class="toolbar-actions">
+        <button id="resume" class="ghost">再検証</button>
+        <button id="export" class="ghost">JSON出力</button>
+      </div>
+    </section>
+
+    <!-- B. 回収済みカード一覧 -->
+    <section class="panel-header"><h2>回収済みカード一覧</h2><small id="list-count">0 件</small></section>
     <section id="records" class="records" aria-live="polite"></section>
+
+    <!-- D. 回収履歴 -->
+    <section class="panel">
+      <h2>回収履歴</h2>
+      <div id="history-list" class="history-list" aria-live="polite">
+        <div class="empty">まだ回収履歴はありません。</div>
+      </div>
+    </section>
+
+    <!-- E. 統計 -->
+    <section class="panel">
+      <h2>統計</h2>
+      <table class="stats-table" id="stats-table">
+        <tbody>
+          <tr><th>成功</th><td id="st-success">0</td></tr>
+          <tr><th>要確認</th><td id="st-review">0</td></tr>
+          <tr><th>FAILED</th><td id="st-failed">0</td></tr>
+          <tr><th>競合</th><td id="st-conflict">0</td></tr>
+          <tr><th>重複</th><td id="st-duplicate">0</td></tr>
+          <tr class="total"><th>合計</th><td id="st-total">0</td></tr>
+          <tr><th>削除可能</th><td id="st-eligible">0</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- G. 原本MHT安全削除説明 -->
+    <section class="panel info-panel">
+      <h2>原本ファイルについて</h2>
+      <p class="muted">ブラウザ / PWAから端末上のファイルを自動削除することはできません。</p>
+      <p>✅ 安全に取り込み済みの場合、ステータスが <span class="badge-inline badge-eligible">DELETE_ELIGIBLE</span> と表示されます。</p>
+      <p>🗑 元のMHT/MHTMLファイルは <strong>Galaxyのマイファイル</strong> から削除できます。</p>
+      <p class="muted small">DELETE_ELIGIBLE = 原本削除して問題ない状態。承認・正式採用とは別です。</p>
+    </section>
   </main>
+
   <footer>NO CLOUD WRITES · INDEXEDDB ONLY</footer>
   <script type="module" src="./src/app.js"></script>
 </body>

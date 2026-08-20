@@ -1,6 +1,7 @@
 const DB_NAME = 'dm-card-collector';
-const VERSION = 1;
-const STORES = ['raw', 'staging', 'failed'];
+const VERSION = 2;
+// Version 2 adds 'mhtImports' store (additive — existing stores unchanged).
+const STORES = ['raw', 'staging', 'failed', 'mhtImports'];
 
 export function openDB() {
   return new Promise((resolve, reject) => {
