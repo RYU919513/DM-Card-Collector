@@ -16,19 +16,25 @@
  */
 export function deriveStatus(record) {
   if (!record) return 'FAILED';
-  // Explicit failure
+  // Explicit failure (staging/failed store)
   if (record.status === 'failed') return 'FAILED';
-  // MHT import with explicit review flag
-  if (record.humanReviewRequired) return 'NEEDS_REVIEW';
+  // MHT import explicit failure state (state field from PR#6 schema)
+  if (record.state === 'FAILED' || record.state === 'VALIDATION_FAILED') return 'FAILED';
+  // MHT CONFLICT
+  if (record.state === 'CONFLICT') return 'CONFLICT';
+  // MHT or capture DUPLICATE
+  if (record.state === 'DUPLICATE' || record.duplicate?.kind === 'DUPLICATE' || record.duplicate?.kind === 'DUPLICATE_RAW') return 'DUPLICATE';
   // Conflict detected by compareRecords
   if (record._hasConflict) return 'CONFLICT';
-  // Duplicate from same or other source
+  // Duplicate from same or other source (capture path)
   if (record.duplicateCount > 0) return 'DUPLICATE';
+  // humanReviewRequired (both MHT and capture paths)
+  if (record.humanReviewRequired || record.state === 'HUMAN_REVIEW_REQUIRED') return 'NEEDS_REVIEW';
   // Low confidence → needs review
   if (typeof record.confidence === 'number' && record.confidence < 0.5) return 'NEEDS_REVIEW';
   // Missing both name and number → needs review
   const f = record.fields || {};
-  if (!f.name && !f.number) return 'NEEDS_REVIEW';
+  if (!f.name && !f.number && !record.cardName && !record.cardNumber) return 'NEEDS_REVIEW';
   return 'SUCCESS';
 }
 
@@ -48,17 +54,24 @@ export function deriveStatus(record) {
  */
 export function isDeleteEligible(record) {
   if (!record) return false;
+  // Explicit failures are not eligible
   if (record.status === 'failed') return false;
+  if (record.state === 'FAILED' || record.state === 'VALIDATION_FAILED') return false;
   // id must exist (metadata saved)
   if (!record.id) return false;
-  // provenance must be recorded
+  // provenance must be recorded (capture path or MHT path)
   if (!record.provenance && !record.provenanceHistory) return false;
-  // validation result must be present (confidence is our proxy when validate() passed)
-  if (typeof record.confidence !== 'number') return false;
-  // humanReviewRequired must not be suppressed — if it was set, we honour it
-  // (it does not prevent eligibility; it means the record is eligible but still pending review)
-  // raw must be preserved: rawId links to mhtRaw/raw store
-  if (!record.rawId && !record.mhtRawId && !record.localRawSaved) return false;
+  // validation result must be present:
+  //   - capture path: confidence is a number
+  //   - MHT path: validation object from validateMhtCandidate
+  const hasValidation = typeof record.confidence === 'number' || (record.validation && typeof record.validation.valid === 'boolean');
+  if (!hasValidation) return false;
+  // raw must be preserved:
+  //   - capture path: rawId links to raw store
+  //   - MHT path: provenance.sourceFileHash links to mhtRaw store
+  const hasRawProof = record.rawId || record.mhtRawId || record.localRawSaved
+    || (record.provenance?.sourceFileHash) || (record.provenance?.rawSourceReference);
+  if (!hasRawProof) return false;
   return true;
 }
 
@@ -102,8 +115,8 @@ export function searchRecords(records, query = '') {
   if (!q) return records;
   return records.filter(record => {
     const f = record.fields || {};
-    const name = String(f.name || '').normalize('NFKC').toLowerCase();
-    const number = String(f.number || '').normalize('NFKC').toLowerCase();
+    const name = String(f.name || record.cardName || '').normalize('NFKC').toLowerCase();
+    const number = String(f.number || record.cardNumber || '').normalize('NFKC').toLowerCase();
     const officialId = String(f.officialId || record.officialId || '').normalize('NFKC').toLowerCase();
     return name.includes(q) || number.includes(q) || officialId.includes(q);
   });

@@ -1,80 +1,81 @@
 # DM Card Collector – Handoff
 
 ## Current Branch
-`copilot/dm-card-collector-development`
+`copilot/dm-integration`
 
 ## Current HEAD
-`b00460c chore: strengthen Codex workflow and MHT extraction tooling`
+Integration merge of PR#6 (`codex/mht/mhtml`) + PR#9 (`copilot/dm-card-collector-development`)
 
-## Changed Files (this session)
-- `src/status.js` — NEW: deriveStatus, isDeleteEligible, annotateWithComparisons, filterByStatus, searchRecords, buildStats
-- `src/db.js` — VERSION bump 1→2; additive `mhtImports` store (existing stores untouched)
-- `src/app.js` — filter/search/history/stats wiring; imports from status.js
-- `index.html` — full UI: summary stats, search, filter toolbar, card list, history, statistics, info panel
-- `src/styles.css` — new status badge classes, filter buttons, history list, stats table, info panel
-- `test/status.test.js` — NEW: 21 tests for status/eligibility/filter/search/stats/annotation
+## Base Mismatch Investigation
+- **PR#6** (`codex/mht/mhtml`, head `80dadc0`): MHT/MHTML foundation
+- **PR#9** (`copilot/dm-card-collector-development`, head `679d8b3`): Collection progress UI
+- Both branched from `b00460c` — **siblings, not parent-child**
+- **BASE MISMATCH: VERIFIED** — PR#9 did not contain PR#6 MHT foundation
+
+## Root Cause
+New Copilot agent session was initialized from `main` / `b00460c` rather than from the existing `codex/mht/mhtml` branch. Each Copilot task agent session defaulted to `main` as base.
+
+## Repair
+Created `copilot/dm-integration` from PR#6 head (`80dadc0`), then merged PR#9 into it.
+Three conflicts resolved:
+- `src/db.js`: VERSION→3, STORES includes both `mhtRaw` + `mhtImports`, `saveMhtImport` preserved
+- `src/styles.css`: PR#9 expanded styles + PR#6 `.drop-zone` / `.import-result`
+- `src/app.js`: combined imports; both MHT pipeline and filter/search/stats wiring
+
+## Changed Files (integration branch)
+- `src/db.js` — VERSION 3; all stores: raw, staging, failed, mhtRaw, mhtImports; saveMhtImport preserved
+- `src/app.js` — full integration: MHT import pipeline + filter/search/stats/history UI + both import paths in render()
+- `src/status.js` — deriveStatus/isDeleteEligible updated for MHT schema (state field, provenance.sourceFileHash, validation object)
+- `src/styles.css` — PR#9 styles + PR#6 drop-zone classes
+- `index.html` — auto-merged: MHT drop zone + capture panel + filter/search + card list + history + stats + info panel
+- `test/status.test.js` — 21 tests (status, eligibility, filter, search, stats)
 - `docs/handoff/CURRENT.md` — this file
 
+## DB Schema (VERSION 3)
+| Store | Added in | Purpose |
+|-------|----------|---------|
+| raw | v1 | pending capture payloads |
+| staging | v1 | validated captures |
+| failed | v1 | failed captures |
+| mhtRaw | v2 (PR#6) | raw MHT bytes + metadata |
+| mhtImports | v2 (both PRs) | parsed MHT candidates |
+
+Upgrade path: fully additive. No existing store deleted or migrated.
+
+## DELETE_ELIGIBLE Integration
+- Capture path: rawId → raw store proof
+- MHT path: provenance.sourceFileHash → mhtRaw store proof; validation object as validation proof
+- `VALIDATED ≠ APPROVED` — no usageAllowed/productionReady set
+- `humanReviewRequired` boundary: always true for MHT; preserved in status display
+
+## Related PRs
+- PR#6: `codex/mht/mhtml` — MHT foundation (open, base=main)
+- PR#9: `copilot/dm-card-collector-development` — collection progress UI (open, base=main)
+- PR#10 (this): `copilot/dm-integration` — integrated both (base=main or codex/mht/mhtml)
+
 ## Tests
-`npm test` → 30 tests, 30 pass, 0 fail
-`node --check` → pass (app.js, core.js, db.js, status.js, sw.js)
+`npm test` → 39 tests, 39 pass, 0 fail
+`python3 -m unittest discover -s test -p 'test_*.py'` → 4 tests OK
+`node --check` → pass (app.js, core.js, db.js, mht.js, mht-pipeline.js, status.js, sw.js)
 `git diff --check` → pass
 
-## Implemented Features
-### A. 回収進捗サマリー
-- 5-column stats: 合計 / SUCCESS / 要確認 / FAILED / 削除可能
-
-### B. 回収済みカード一覧
-- cardName, cardNumber, officialId (if present), source type, capturedAt, status badge, conflict/duplicate annotation, deleteEligible badge
-
-### C. 検索 / フィルタ
-- Search: カード名 / 番号 / officialId (partial, NFKC-normalized)
-- Filter: ALL / SUCCESS / NEEDS_REVIEW / FAILED / CONFLICT / DUPLICATE / DELETE_ELIGIBLE
-
-### D. 回収履歴
-- Most recent 20 records: name, timestamp, status dot, deleteEligible badge
-
-### E. 統計
-- Table: 成功 / 要確認 / FAILED / 競合 / 重複 / 合計 / 削除可能
-- No external chart library; pure HTML table
-
-### F. DELETE_ELIGIBLE判定
-- Conditions: id ✓ + provenance ✓ + confidence (number) ✓ + raw preserved (rawId or mhtRawId or localRawSaved) ✓
-- VALIDATED ≠ APPROVED: no usageAllowed/productionReady set
-- humanReviewRequired boundary preserved: review status visible, does not block eligibility
-
-### G. Galaxy元ファイル削除
-- Auto-delete from browser: NOT POSSIBLE (File System Access API delete requires explicit user gesture per-file; Share Target gives no path handle)
-- UI: info panel explains → "Galaxyのマイファイルから削除できます"
-- No false "deleted" state stored
-
-## IndexedDB Safety
-- VERSION 1→2 additive only: no store deletion, no migration, no clear
-- Existing raw / staging / failed stores unchanged
-
-## Human Approval Boundary
-- usageAllowed, productionReady: never set by this code
-- DELETE_ELIGIBLE is strictly a local provenance/raw-preservation check
-
-## Real MHT/MHTML
-- No real MHT committed to Git
-- mht.js and mht-pipeline.js: not yet implemented (out of scope for this session)
-
 ## Known Limitations
-- mhtImports store exists in DB schema but no MHT import pipeline UI yet
-- Playwright runtime UI verification: not run (browser environment not available in sandbox)
+- Playwright UI runtime verification: not run (browser not available in sandbox)
 - Real Galaxy device testing: not performed
+- PR#6 and PR#9 remain open — user should close/supersede with this integration PR when ready
+- MHT cards in `mhtImports` store now included in render() progress summary
 
 ## NEXT TASK
-Implement MHT/MHTML import pipeline (src/mht.js + src/mht-pipeline.js):
-- MIME parsing, SEARCH_RESULT / CARD_DETAIL classification
-- mhtRaw store preservation
-- humanReviewRequired boundary assignment
-- Connect to mhtImports store and status.js DELETE_ELIGIBLE flow
+Verify this integration branch on a real Galaxy device:
+1. Import a real MHT search page → confirm SEARCH_RESULT parsing and card links
+2. Import a real MHT card detail page → confirm CARD_DETAIL fields extracted
+3. Confirm DELETE_ELIGIBLE status appears after successful import
+4. Confirm `humanReviewRequired` is always true and never auto-approved
+5. After real-device verification, merge this PR and close PR#6 and PR#9
 
 ## Codex / Next Agent Notes
-- status.js is the canonical status/eligibility module — extend here, do not duplicate
-- db.js VERSION is now 2; next additive store → VERSION 3
-- Filter buttons use data-filter attribute matching deriveStatus() return values
-- isDeleteEligible does NOT depend on confidence or humanReviewRequired — only on raw provenance preservation
-- All tests in test/ must remain green; add tests for new behavior
+- `status.js` handles both capture-schema (rawId, confidence) and MHT-schema (provenance.sourceFileHash, validation object)
+- `db.js` VERSION is now 3; next additive store → VERSION 4
+- All MHT imports stored in `mhtImports` with `humanReviewRequired: true`; never auto-approved
+- `saveMhtImport` atomically writes to both `mhtRaw` and `mhtImports` in a single transaction
+- PR#6 and PR#9 ancestor: both from `b00460c`; this integration branch merges both

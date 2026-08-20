@@ -31,6 +31,11 @@
 
     <!-- 回収入口 -->
     <section class="panel">
+      <label for="mht-input">公式カード検索 MHT / MHTML</label>
+      <div id="mht-drop" class="drop-zone"><input id="mht-input" type="file" accept=".mht,.mhtml,multipart/related,message/rfc822"><strong>MHT/MHTMLを追加</strong><small>端末内だけで解析・保存します（最大50 MB）</small></div>
+      <div id="mht-result" class="import-result" aria-live="polite"></div>
+    </section>
+    <section class="panel">
       <label for="capture-input">テキスト / URL / JSON</label>
       <textarea id="capture-input" rows="6" placeholder="カード名、型番、能力テキスト、URLなどを貼り付け"></textarea>
       <div class="actions">
