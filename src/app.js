@@ -8,6 +8,7 @@ const $ = selector => document.querySelector(selector);
 let installPrompt;
 let currentFilter = 'ALL';
 let currentSearch = '';
+const APP_VERSION = 'mht-fix-2026-08-20-1';
 
 // ---- capture pipeline ----
 
@@ -67,17 +68,26 @@ function cardHtml(record) {
   const f = record.fields || {};
   const status = deriveStatus(record);
   const eligible = isDeleteEligible(record);
-  const ts = record.capturedAt ? new Date(record.capturedAt).toLocaleString('ja-JP') : '–';
+  const tsRaw = record.capturedAt || record.lastAttempt || record.importedAt;
+  const ts = tsRaw ? new Date(tsRaw).toLocaleString('ja-JP') : '–';
+  const imageCount = (f.imageUrls || []).length || (record.imageUrlCandidates || []).length || (record.thumbnailUrl ? 1 : 0);
+  const confidence = typeof record.confidence === 'number'
+    ? record.confidence
+    : record.pageType === PAGE_TYPES.CARD_DETAIL ? 0.6
+      : record.pageType === PAGE_TYPES.SEARCH_RESULT ? 0.4
+        : 0;
+  const title = f.name || record.cardName || (record.officialId ? `ID:${record.officialId}` : '名称未取得');
+  const number = f.number || record.cardNumber || '番号未取得';
   return `<article class="card">
     <div class="card-header">
       <div class="badge">${esc(record.source || record.pageType || 'generic')}</div>
       <span class="status-badge ${statusClass(status)}">${esc(status)}</span>
       ${eligible ? '<span class="badge-eligible">削除可能</span>' : ''}
     </div>
-    <h3>${esc(f.name || record.cardName || '名称未取得')}</h3>
-    <p class="card-number">${esc(f.number || record.cardNumber || '番号未取得')}</p>
+    <h3>${esc(title)}</h3>
+    <p class="card-number">${esc(number)}</p>
     ${(f.officialId || record.officialId) ? `<p class="muted small">officialId: ${esc(f.officialId || record.officialId)}</p>` : ''}
-    <small class="muted">回収: ${esc(ts)} · 信頼度 ${Math.round((record.confidence || 0) * 100)}% · 画像候補 ${(f.imageUrls || []).length} · 重複 ${record.duplicateCount || 0}</small>
+    <small class="muted">回収: ${esc(ts)} · 信頼度 ${Math.round(confidence * 100)}% · 画像候補 ${imageCount} · 重複 ${record.duplicateCount || 0}</small>
     ${record._hasConflict ? '<p class="warn">⚠ 競合あり</p>' : ''}
   </article>`;
 }
@@ -100,11 +110,41 @@ function historyItemHtml(record) {
 // Module-level cache so export handler can use annotated data
 let _lastAnnotated = [];
 let _lastComparisons = [];
+let _lastMhtImports = [];
+
+function expandMhtImports(mhtImports = []) {
+  return mhtImports.flatMap(record => {
+    if (record.pageType !== PAGE_TYPES.SEARCH_RESULT) return [record];
+    const cards = Array.isArray(record.cards) ? record.cards : [];
+    if (!cards.length) return [record];
+    return cards.map(card => ({
+      id: `${record.id}::${card.position}`,
+      pageType: PAGE_TYPES.SEARCH_RESULT,
+      source: 'OFFICIAL_MHT',
+      state: record.state,
+      humanReviewRequired: true,
+      confidence: (card.cardName || card.cardNumber) ? 0.45 : 0.25,
+      cardName: card.cardName || null,
+      cardNumber: card.cardNumber || null,
+      officialId: card.officialId || null,
+      imageUrlCandidates: card.imageUrlCandidates || [],
+      thumbnailUrl: card.thumbnailUrl || null,
+      detailUrl: card.detailUrl || null,
+      duplicateCount: card.duplicateInPage ? 1 : 0,
+      capturedAt: record.capturedAt || null,
+      importedAt: record.provenance?.importedAt || record.lastAttempt || null,
+      lastAttempt: record.lastAttempt || null,
+      validation: record.validation,
+      provenance: { ...(record.provenance || {}), position: card.position, pageCard: true },
+    }));
+  });
+}
 
 async function render() {
   const [rawStore, stagingStore, failedStore, mhtImports] = await Promise.all(
     ['raw', 'staging', 'failed', 'mhtImports'].map(getAll)
   );
+  _lastMhtImports = mhtImports;
 
   const comparisons = compareRecords(stagingStore);
   const annotated = annotateWithComparisons(stagingStore, comparisons);
@@ -115,7 +155,7 @@ async function render() {
   const allRecords = [
     ...annotated,
     ...failedStore.map(r => ({ ...r, status: 'failed' })),
-    ...mhtImports
+    ...expandMhtImports(mhtImports)
   ];
 
   // Stats — raw queue shown separately (not conflated with NEEDS_REVIEW)
@@ -147,7 +187,7 @@ async function render() {
     : '<div class="empty">該当するカードはありません。</div>';
 
   // History (most recent 20 from staging + mhtImports)
-  const recent = [...annotated, ...mhtImports]
+  const recent = [...annotated, ...expandMhtImports(mhtImports)]
     .sort((a, b) => (b.capturedAt || b.lastAttempt || '').localeCompare(a.capturedAt || a.lastAttempt || ''))
     .slice(0, 20);
   $('#history-list').innerHTML = recent.length
@@ -168,13 +208,19 @@ async function importMht(file) {
     const base = detected.pageType === PAGE_TYPES.SEARCH_RESULT ? parseSearchResult(parsed.html, parsed) : detected.pageType === PAGE_TYPES.CARD_DETAIL ? parseCardDetail(parsed.html, parsed) : { pageType: PAGE_TYPES.UNKNOWN, sourceUrl: parsed.sourceUrl };
     const contentHash = await sha256Hex(new TextEncoder().encode(JSON.stringify(base)));
     const importedAt = new Date().toISOString();
-    let candidate = enrichCandidate({ ...base, contentHash }, { sourceType: 'OFFICIAL_MHT', sourceUrl: parsed.sourceUrl, sourceFileName: file.name.replace(/^.*[\\/]/, '').slice(0, 255), sourceFileHash, importedAt, capturedAt: null, rawSourceReference: sourceFileHash });
+    const diagnostics = {
+      appVersion: APP_VERSION,
+      classifier: detected,
+      mime: { partCount: parsed.parts?.length || 0, resourceCount: parsed.resources?.length || 0, selectedSourceUrl: parsed.sourceUrl || null },
+      extraction: { pageType: base.pageType, candidateCount: base.cards?.length || 0 }
+    };
+    let candidate = enrichCandidate({ ...base, contentHash, diagnostics }, { sourceType: 'OFFICIAL_MHT', sourceUrl: parsed.sourceUrl, sourceFileName: file.name.replace(/^.*[\\/]/, '').slice(0, 255), sourceFileHash, importedAt, capturedAt: null, rawSourceReference: sourceFileHash });
     const existing = await getAll('mhtImports'); const duplicate = compareMhtCandidate(candidate, existing);
     candidate = { ...candidate, id: crypto.randomUUID(), duplicate, retryCount: 0, lastAttempt: importedAt };
     if (duplicate.kind !== 'NEW') candidate = { ...candidate, state: duplicate.kind === 'DUPLICATE' || duplicate.kind === 'DUPLICATE_RAW' ? 'DUPLICATE' : 'CONFLICT', humanReviewRequired: true };
     await saveMhtImport({ id: sourceFileHash, sourceFileName: candidate.provenance.sourceFileName, sourceFileHash, importedAt, bytes: new Blob([bytes], { type: file.type || 'multipart/related' }), byteLength: bytes.length }, candidate);
     const progress = collectionProgress([...existing, candidate]);
-    if (candidate.pageType === PAGE_TYPES.SEARCH_RESULT) result.innerHTML = `<h3>ページ ${candidate.pageNumber ?? '不明'} を認識しました</h3><p>${candidate.occurrenceCount}件検出 · 固有 ${candidate.uniqueCardCount} · 重複 ${candidate.duplicateCount}</p><p>状態: ${escapeHtml(candidate.state)} · 要確認</p><small>保存済み${progress.nextSuggestedPage ? ` · 次に推奨: ページ${progress.nextSuggestedPage}` : ''}</small>`;
+    if (candidate.pageType === PAGE_TYPES.SEARCH_RESULT) result.innerHTML = `<h3>ページ ${candidate.pageNumber ?? '不明'} を認識しました</h3><p>${candidate.occurrenceCount}件検出 · 固有 ${candidate.uniqueCardCount} · 重複 ${candidate.duplicateCount}</p><p>保存候補 ${candidate.cards?.length || 0} · 状態: ${escapeHtml(candidate.state)} · 要確認</p><small>保存済み${progress.nextSuggestedPage ? ` · 次に推奨: ページ${progress.nextSuggestedPage}` : ''}</small>`;
     else if (candidate.pageType === PAGE_TYPES.CARD_DETAIL) result.innerHTML = `<h3>${escapeHtml(candidate.cardName || 'カード名未取得')}</h3><p>${escapeHtml(candidate.cardNumber || '番号未取得')} · ${escapeHtml(candidate.officialId || 'ID未取得')}</p><p>抽出 ${Object.values(candidate).filter(Boolean).length} field · ${escapeHtml(candidate.state)} · 要確認</p><small>raw保存済み</small>`;
     else { result.classList.add('error'); result.innerHTML = '<h3>ページ種別を判定できません</h3><p>rawは保存しました。再試行または人間レビューが必要です。</p>'; }
     await render();
@@ -208,9 +254,11 @@ $('#resume').onclick = async () => {
 $('#export').onclick = async () => {
   const [raw, , failed] = await Promise.all(['raw', 'staging', 'failed'].map(getAll));
   const output = {
+    appVersion: APP_VERSION,
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
     records: _lastAnnotated,
+    mhtImports: _lastMhtImports,
     raw,
     failed,
     comparisons: _lastComparisons
@@ -266,4 +314,5 @@ if (params.has('capture') || params.has('share')) {
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+document.querySelector('footer').textContent = `NO CLOUD WRITES · INDEXEDDB ONLY · BUILD ${APP_VERSION}`;
 render();

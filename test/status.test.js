@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { annotateWithComparisons, buildStats, deriveStatus, filterByStatus, isDeleteEligible, searchRecords } from '../src/status.js';
 
-// Shared fixtures
 const successRecord = {
   id: 'dm-aabbccdd',
   rawId: 'raw-001',
@@ -32,7 +31,15 @@ const reviewRecord = {
   fields: { name: 'Unknown Card', number: null, imageUrls: [] }
 };
 
-// ---- deriveStatus ----
+const mhtSearchRecord = {
+  id: 'mht-1',
+  pageType: 'SEARCH_RESULT',
+  state: 'HUMAN_REVIEW_REQUIRED',
+  humanReviewRequired: true,
+  provenance: { sourceFileHash: 'hash-1', rawSourceReference: 'hash-1' },
+  validation: { valid: true },
+  cards: [{ officialId: 'dm-001', detailUrl: 'https://dm.takaratomy.co.jp/card/detail/?id=dm-001' }]
+};
 
 test('deriveStatus returns SUCCESS for high-confidence record with name+number', () => {
   assert.equal(deriveStatus(successRecord), 'SUCCESS');
@@ -45,6 +52,7 @@ test('deriveStatus returns FAILED for status=failed record', () => {
 
 test('deriveStatus returns NEEDS_REVIEW when humanReviewRequired=true', () => {
   assert.equal(deriveStatus(reviewRecord), 'NEEDS_REVIEW');
+  assert.equal(deriveStatus(mhtSearchRecord), 'NEEDS_REVIEW');
 });
 
 test('deriveStatus returns NEEDS_REVIEW for low confidence', () => {
@@ -59,10 +67,9 @@ test('deriveStatus returns DUPLICATE when duplicateCount > 0', () => {
   assert.equal(deriveStatus({ ...successRecord, duplicateCount: 1, id: 'dm-dup' }), 'DUPLICATE');
 });
 
-// ---- isDeleteEligible ----
-
 test('isDeleteEligible returns true for a fully-preserved record', () => {
   assert.equal(isDeleteEligible(successRecord), true);
+  assert.equal(isDeleteEligible(mhtSearchRecord), true);
 });
 
 test('isDeleteEligible returns false for failed record', () => {
@@ -70,7 +77,7 @@ test('isDeleteEligible returns false for failed record', () => {
   assert.equal(isDeleteEligible(null), false);
 });
 
-test('isDeleteEligible returns false when rawId and mhtRawId and localRawSaved are absent', () => {
+test('isDeleteEligible returns false when raw preservation proof is absent', () => {
   const { rawId: _r, ...noRaw } = successRecord;
   assert.equal(isDeleteEligible({ ...noRaw, id: 'dm-noraw' }), false);
 });
@@ -81,26 +88,32 @@ test('isDeleteEligible returns false when provenance is missing', () => {
 });
 
 test('isDeleteEligible accepts mhtRawId as raw preservation proof', () => {
-  const r = { ...successRecord, id: 'dm-mhtraw', rawId: undefined, mhtRawId: 'mht-001' };
-  assert.equal(isDeleteEligible(r), true);
+  const record = { ...successRecord, id: 'dm-mhtraw', rawId: undefined, mhtRawId: 'mht-001' };
+  assert.equal(isDeleteEligible(record), true);
 });
 
 test('isDeleteEligible accepts localRawSaved flag', () => {
-  const r = { ...successRecord, id: 'dm-lrs', rawId: undefined, localRawSaved: true };
-  assert.equal(isDeleteEligible(r), true);
+  const record = { ...successRecord, id: 'dm-lrs', rawId: undefined, localRawSaved: true };
+  assert.equal(isDeleteEligible(record), true);
 });
 
-// ---- humanReviewRequired boundary ----
-
-test('isDeleteEligible does not block DELETE_ELIGIBLE when humanReviewRequired=true', () => {
-  // humanReviewRequired means pending review, NOT that raw is unsafe to delete.
-  // reviewRecord has rawId + provenance + confidence, so it IS eligible.
-  assert.equal(isDeleteEligible(reviewRecord), true);
-  const fullReview = { ...successRecord, id: 'dm-hr', humanReviewRequired: true };
-  assert.equal(isDeleteEligible(fullReview), true);
+test('name/number missing and confidence 0 does not become delete-eligible without extracted card payload', () => {
+  const record = {
+    id: 'mht-empty',
+    pageType: 'UNKNOWN',
+    confidence: 0,
+    provenance: { sourceFileHash: 'hash-empty' },
+    validation: { valid: false },
+    humanReviewRequired: true
+  };
+  assert.equal(isDeleteEligible(record), false);
 });
 
-// ---- filterByStatus ----
+test('humanReviewRequired boundary is preserved (never auto-success)', () => {
+  const record = { ...mhtSearchRecord, confidence: 0.9 };
+  assert.equal(deriveStatus(record), 'NEEDS_REVIEW');
+  assert.equal(record.humanReviewRequired, true);
+});
 
 test('filterByStatus ALL returns all records', () => {
   const records = [successRecord, { ...reviewRecord }, { ...failedRecord }];
@@ -112,8 +125,6 @@ test('filterByStatus SUCCESS returns only success records', () => {
   const result = filterByStatus(records, 'SUCCESS');
   assert.ok(result.every(r => deriveStatus(r) === 'SUCCESS'));
 });
-
-// ---- searchRecords ----
 
 test('searchRecords finds by partial card name', () => {
   const records = [successRecord];
@@ -130,23 +141,15 @@ test('searchRecords returns all records for empty query', () => {
   assert.equal(searchRecords([successRecord, failedRecord], '').length, 2);
 });
 
-// ---- buildStats ----
-
 test('buildStats counts all status categories', () => {
-  const records = [
-    successRecord,
-    { ...reviewRecord, id: 'r1' },
-    { ...failedRecord, id: 'r2' }
-  ];
+  const records = [successRecord, { ...reviewRecord, id: 'r1' }, { ...failedRecord, id: 'r2' }, mhtSearchRecord];
   const stats = buildStats(records);
-  assert.equal(stats.total, 3);
+  assert.equal(stats.total, 4);
   assert.equal(stats.SUCCESS, 1);
-  assert.equal(stats.NEEDS_REVIEW, 1);
+  assert.equal(stats.NEEDS_REVIEW, 2);
   assert.equal(stats.FAILED, 1);
-  assert.equal(stats.DELETE_ELIGIBLE, 2); // successRecord and reviewRecord both qualify (rawId + provenance)
+  assert.equal(stats.DELETE_ELIGIBLE, 3);
 });
-
-// ---- annotateWithComparisons ----
 
 test('annotateWithComparisons flags records with conflict', () => {
   const records = [
@@ -160,7 +163,6 @@ test('annotateWithComparisons flags records with conflict', () => {
 });
 
 test('annotateWithComparisons does not mutate original records', () => {
-  const orig = { ...successRecord };
   annotateWithComparisons([successRecord], []);
   assert.equal(successRecord._hasConflict, undefined);
 });

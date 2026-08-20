@@ -72,6 +72,13 @@ export function isDeleteEligible(record) {
   const hasRawProof = record.rawId || record.mhtRawId || record.localRawSaved
     || (record.provenance?.sourceFileHash) || (record.provenance?.rawSourceReference);
   if (!hasRawProof) return false;
+  // Require minimum parsed payload so "raw only" placeholders are not marked safe.
+  if (record.pageType === 'SEARCH_RESULT' && (!Array.isArray(record.cards) || record.cards.length === 0)) return false;
+  if (record.pageType === 'CARD_DETAIL' && !(record.officialId || record.cardName || record.cardNumber)) return false;
+  if (!record.pageType) {
+    const f = record.fields || {};
+    if (!f.name && !f.number && !record.cardName && !record.cardNumber && !record.officialId) return false;
+  }
   return true;
 }
 
