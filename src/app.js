@@ -67,7 +67,7 @@ const statusClass = s => ({
 function cardHtml(record) {
   const f = record.fields || {};
   const status = deriveStatus(record);
-  const eligible = isDeleteEligible(record);
+  const eligible = !record._viewOnly && isDeleteEligible(record);
   const tsRaw = record.capturedAt || record.lastAttempt || record.importedAt;
   const ts = tsRaw ? new Date(tsRaw).toLocaleString('ja-JP') : '–';
   const imageCount = (f.imageUrls || []).length || (record.imageUrlCandidates || []).length || (record.thumbnailUrl ? 1 : 0);
@@ -94,7 +94,7 @@ function cardHtml(record) {
 
 function historyItemHtml(record) {
   const status = deriveStatus(record);
-  const eligible = isDeleteEligible(record);
+  const eligible = !record._viewOnly && isDeleteEligible(record);
   const ts = record.capturedAt || record.lastAttempt ? new Date(record.capturedAt || record.lastAttempt).toLocaleString('ja-JP') : '–';
   const f = record.fields || {};
   return `<div class="history-item">
@@ -135,6 +135,7 @@ function expandMhtImports(mhtImports = []) {
       importedAt: record.provenance?.importedAt || record.lastAttempt || null,
       lastAttempt: record.lastAttempt || null,
       validation: record.validation,
+      _viewOnly: true,
       provenance: { ...(record.provenance || {}), position: card.position, pageCard: true },
     }));
   });
@@ -152,6 +153,11 @@ async function render() {
   _lastComparisons = comparisons;
 
   // For DELETE_ELIGIBLE filter we treat all stores including mhtImports
+  const persistedRecords = [
+    ...annotated,
+    ...failedStore.map(r => ({ ...r, status: 'failed' })),
+    ...mhtImports
+  ];
   const allRecords = [
     ...annotated,
     ...failedStore.map(r => ({ ...r, status: 'failed' })),
@@ -159,7 +165,7 @@ async function render() {
   ];
 
   // Stats — raw queue shown separately (not conflated with NEEDS_REVIEW)
-  const stats = buildStats(allRecords);
+  const stats = buildStats(persistedRecords);
   $('#stat-total').textContent = stats.total + rawStore.length;
   $('#stat-success').textContent = stats.SUCCESS || 0;
   $('#stat-review').textContent = stats.NEEDS_REVIEW || 0;
@@ -202,8 +208,10 @@ async function importMht(file) {
   const result = $('#mht-result'); result.className = 'import-result'; result.textContent = '解析中…';
   try {
     bytes = new Uint8Array(await file.arrayBuffer());
-    [sourceFileHash] = await Promise.all([sha256Hex(bytes)]);
-    const [parsed] = await Promise.all([parseMht({ name: file.name, type: file.type, arrayBuffer: async () => bytes.buffer })]);
+    const [sourceFileHash, parsed] = await Promise.all([
+      sha256Hex(bytes),
+      parseMht({ name: file.name, type: file.type, arrayBuffer: async () => bytes.buffer })
+    ]);
     const detected = classifyPage(parsed);
     const base = detected.pageType === PAGE_TYPES.SEARCH_RESULT ? parseSearchResult(parsed.html, parsed) : detected.pageType === PAGE_TYPES.CARD_DETAIL ? parseCardDetail(parsed.html, parsed) : { pageType: PAGE_TYPES.UNKNOWN, sourceUrl: parsed.sourceUrl };
     const contentHash = await sha256Hex(new TextEncoder().encode(JSON.stringify(base)));
@@ -252,16 +260,18 @@ $('#resume').onclick = async () => {
   $('#status').textContent = '保留中の回収を再検証しました。';
 };
 $('#export').onclick = async () => {
-  const [raw, , failed] = await Promise.all(['raw', 'staging', 'failed'].map(getAll));
+  const [raw, staging, failed, mhtImports] = await Promise.all(['raw', 'staging', 'failed', 'mhtImports'].map(getAll));
+  const comparisons = compareRecords(staging);
+  const annotated = annotateWithComparisons(staging, comparisons);
   const output = {
     appVersion: APP_VERSION,
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
-    records: _lastAnnotated,
-    mhtImports: _lastMhtImports,
+    records: annotated,
+    mhtImports,
     raw,
     failed,
-    comparisons: _lastComparisons
+    comparisons
   };
   const link = Object.assign(document.createElement('a'), {
     href: URL.createObjectURL(new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' })),

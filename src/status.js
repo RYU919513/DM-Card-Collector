@@ -75,7 +75,7 @@ export function isDeleteEligible(record) {
   // Require minimum parsed payload so "raw only" placeholders are not marked safe.
   if (record.pageType === 'SEARCH_RESULT' && (!Array.isArray(record.cards) || record.cards.length === 0)) return false;
   if (record.pageType === 'CARD_DETAIL' && !(record.officialId || record.cardName || record.cardNumber)) return false;
-  if (!record.pageType) {
+  if (!record.pageType || record.pageType === 'UNKNOWN') {
     const f = record.fields || {};
     if (!f.name && !f.number && !record.cardName && !record.cardNumber && !record.officialId) return false;
   }
@@ -88,7 +88,6 @@ export function isDeleteEligible(record) {
  */
 export function annotateWithComparisons(records, comparisons = []) {
   const conflictIds = new Set();
-  const duplicateIds = new Set();
   for (const comp of comparisons) {
     if (comp.conflicts.length > 0) {
       // all records in this group have a conflict
