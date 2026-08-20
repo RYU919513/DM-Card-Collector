@@ -2,8 +2,14 @@
   // Cloudflare Workers / Pages configuration for PR preview deployments.
   // Build output is dist/ — never the repository root.
   // Production GitHub Pages (main branch) is unaffected by this config.
-  "name": "dm-card-collector-preview",
+  "name": "dm-card-collector",
   "compatibility_date": "2024-09-23",
+  // build.command is read by Cloudflare Workers Builds GitHub App.
+  // Running `npm run build:preview` copies only PWA assets to dist/,
+  // explicitly excluding node_modules, .git, *.mht, *.mhtml.
+  "build": {
+    "command": "npm run build:preview"
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

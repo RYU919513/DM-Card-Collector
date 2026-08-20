@@ -54,7 +54,7 @@ jobs:
           echo "dist clean OK"
 
       # Deploy to Cloudflare Workers as a preview (non-production branch).
-      # Deploys to dm-card-collector-preview.workers.dev — isolated from production.
+      # Deploys to dm-card-collector.workers.dev — isolated from production GitHub Pages.
       # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must be set as repo secrets.
       - name: Deploy to Cloudflare (preview)
         id: deploy
