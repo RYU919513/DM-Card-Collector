@@ -1,0 +1,12 @@
+{
+  // Cloudflare Workers / Pages configuration for PR preview deployments.
+  // Build output is dist/ — never the repository root.
+  // Production GitHub Pages (main branch) is unaffected by this config.
+  "name": "dm-card-collector-preview",
+  "compatibility_date": "2024-09-23",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  }
+}
