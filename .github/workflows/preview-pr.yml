@@ -33,6 +33,9 @@ jobs:
           node --check src/app.js
           node --check src/core.js
           node --check src/db.js
+          node --check src/mht.js
+          node --check src/mht-pipeline.js
+          node --check src/status.js
           node --check sw.js
 
       # Build isolated dist/ — only PWA delivery assets, no node_modules
@@ -50,7 +53,8 @@ jobs:
           if find dist -name "*.mht" -o -name "*.mhtml" | grep -q .; then echo "ERROR: MHT files in dist"; exit 1; fi
           echo "dist clean OK"
 
-      # Deploy to Cloudflare Workers as a preview version (non-production)
+      # Deploy to Cloudflare Workers as a preview (non-production branch).
+      # Deploys to dm-card-collector-preview.workers.dev — isolated from production.
       # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must be set as repo secrets.
       - name: Deploy to Cloudflare (preview)
         id: deploy
@@ -58,7 +62,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: versions upload --experimental-versions
+          command: deploy
         env:
           WRANGLER_LOG: info
 
