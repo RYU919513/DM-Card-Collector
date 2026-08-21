@@ -1,0 +1,1 @@
+export function createObjectUrlPool(urlApi=URL){const active=new Set;return{create(blob){const url=urlApi.createObjectURL(blob);active.add(url);return url},revoke(url){if(active.delete(url))urlApi.revokeObjectURL(url)},revokeAll(){for(const url of [...active]){active.delete(url);urlApi.revokeObjectURL(url)}},size(){return active.size}}}

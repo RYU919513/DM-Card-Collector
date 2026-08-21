@@ -1,35 +1,16 @@
-const DB_NAME = 'dm-card-collector';
-// Version 3: merges PR#6 (mhtRaw, mhtImports, saveMhtImport) and PR#9 (mhtImports) — fully additive.
-const VERSION = 3;
-const STORES = ['raw', 'staging', 'failed', 'mhtRaw', 'mhtImports'];
+const DB_NAME='dm-card-collector';
+// Version 4: additive mhtImages store for embedded image blobs/metadata.
+const VERSION=4;
+const STORES=['raw','staging','failed','mhtRaw','mhtImports','mhtImages'];
 
-export function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, VERSION);
-    request.onupgradeneeded = () => STORES.forEach(name => { if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name, { keyPath: 'id' }); });
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-export async function transact(store, mode, action) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(store, mode);
-    const request = action(tx.objectStore(store));
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-    tx.oncomplete = () => db.close();
-  });
-}
-export const put = (store, value) => transact(store, 'readwrite', objectStore => objectStore.put(value));
-export const getAll = store => transact(store, 'readonly', objectStore => objectStore.getAll());
-export const remove = (store, id) => transact(store, 'readwrite', objectStore => objectStore.delete(id));
-export function saveMhtImport(raw, candidate) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(['mhtRaw', 'mhtImports'], 'readwrite');
-    tx.objectStore('mhtRaw').put(raw); tx.objectStore('mhtImports').put(candidate);
-    tx.oncomplete = () => { db.close(); resolve(candidate); };
-    tx.onerror = tx.onabort = () => { const error = tx.error; db.close(); reject(error); };
-  }));
-}
+export function openDB(){return new Promise((resolve,reject)=>{const request=indexedDB.open(DB_NAME,VERSION);request.onupgradeneeded=()=>STORES.forEach(name=>{if(!request.result.objectStoreNames.contains(name))request.result.createObjectStore(name,{keyPath:'id'})});request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+export async function transact(store,mode,action){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(store,mode),request=action(tx.objectStore(store));request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);tx.oncomplete=()=>db.close();tx.onerror=()=>reject(tx.error)})}
+export const put=(store,value)=>transact(store,'readwrite',objectStore=>objectStore.put(value));
+export const get=(store,id)=>transact(store,'readonly',objectStore=>objectStore.get(id));
+export const getAll=store=>transact(store,'readonly',objectStore=>objectStore.getAll());
+export const remove=(store,id)=>transact(store,'readwrite',objectStore=>objectStore.delete(id));
+export function getMany(store,ids=[]){const keys=[...new Set(ids.filter(Boolean))];if(!keys.length)return Promise.resolve([]);return openDB().then(db=>new Promise((resolve,reject)=>{const tx=db.transaction(store,'readonly'),objectStore=tx.objectStore(store),results=[],errors=[];let pending=keys.length;for(const id of keys){const request=objectStore.get(id);request.onsuccess=()=>{if(request.result)results.push(request.result);if(--pending===0){db.close();errors.length?reject(errors[0]):resolve(results)}};request.onerror=()=>{errors.push(request.error);if(--pending===0){db.close();reject(errors[0])}}}}))}
+const req=request=>new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+const uniq=v=>[...new Set((v||[]).filter(Boolean))];
+function mergeImageRecord(existing={},incoming={}){return{...existing,...incoming,id:incoming.id||existing.id,hash:incoming.hash||existing.hash,blob:existing.blob||incoming.blob,mimeType:existing.mimeType||incoming.mimeType,headerMimeType:existing.headerMimeType||incoming.headerMimeType||null,byteLength:existing.byteLength||incoming.byteLength||0,width:existing.width??incoming.width??null,height:existing.height??incoming.height??null,previewable:existing.previewable??incoming.previewable??true,source:incoming.source||existing.source||'MHT_EMBEDDED',sourceFileHash:incoming.sourceFileHash||existing.sourceFileHash||null,mhtImportId:incoming.mhtImportId||existing.mhtImportId||null,importedAt:existing.importedAt||incoming.importedAt||new Date().toISOString(),contentLocations:uniq([...(existing.contentLocations||[]),...(incoming.contentLocations||[])]),contentIds:uniq([...(existing.contentIds||[]),...(incoming.contentIds||[])]),provenance:uniq([...(existing.provenance||[]),...(incoming.provenance||[])].map(item=>JSON.stringify(item))).map(item=>JSON.parse(item))}}
+export function saveMhtImport(raw,candidate,images=[]){return openDB().then(db=>new Promise((resolve,reject)=>{const stores=['mhtRaw','mhtImports',...(images.length?['mhtImages']:[])],tx=db.transaction(stores,'readwrite'),imageStore=images.length?tx.objectStore('mhtImages'):null;tx.objectStore('mhtRaw').put(raw);tx.objectStore('mhtImports').put(candidate);(async()=>{try{for(const image of images){const existing=await req(imageStore.get(image.id));imageStore.put(existing?mergeImageRecord(existing,image):image)}}catch(error){reject(error);tx.abort()}})();tx.oncomplete=()=>{db.close();resolve(candidate)};tx.onerror=tx.onabort=()=>{const error=tx.error;db.close();reject(error)}}))}

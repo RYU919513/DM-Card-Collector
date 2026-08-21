@@ -1,5 +1,5 @@
-const CACHE = 'dm-card-collector-v3';
-const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './src/app.js', './src/core.js', './src/db.js', './src/mht.js', './src/mht-pipeline.js', './src/status.js', './src/styles.css', './icons/icon.svg'];
+const CACHE = 'dm-card-collector-v4';
+const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './src/app.js', './src/core.js', './src/db.js', './src/mht.js', './src/mht-images.js', './src/mht-pipeline.js', './src/object-url-pool.js', './src/status.js', './src/styles.css', './icons/icon.svg'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {
